@@ -1,0 +1,58 @@
+<UserControl x:Class="ClaudeStats.Views.TrayPopupView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DesignWidth="280">
+    <Border Background="#FF23252B" CornerRadius="10" Padding="16"
+            Width="280" BorderBrush="#33FFFFFF" BorderThickness="1">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.4" />
+        </Border.Effect>
+        <StackPanel>
+            <TextBlock Text="CLAUDE USAGE" Foreground="#99FFFFFF"
+                       FontSize="11" FontWeight="SemiBold" />
+            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                <TextBlock Text="{Binding HeadlineText}" Foreground="White"
+                           FontSize="30" FontWeight="Bold" />
+                <TextBlock Text="{Binding ResetText}" Foreground="#B3FFFFFF"
+                           FontSize="12" VerticalAlignment="Bottom" Margin="10,0,0,6" />
+            </StackPanel>
+
+            <ItemsControl ItemsSource="{Binding Windows}" Margin="0,12,0,0">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Margin="0,0,0,10">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding Name}"
+                                       Foreground="#E6FFFFFF" FontSize="13" />
+                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding PercentText}"
+                                       Foreground="White" FontSize="13" FontWeight="SemiBold" />
+                            <ProgressBar Grid.Row="1" Grid.ColumnSpan="2" Height="4" Margin="0,5,0,0"
+                                         Minimum="0" Maximum="100" Value="{Binding Percent, Mode=OneWay}"
+                                         Background="#22FFFFFF" Foreground="#FF4A9EE0"
+                                         BorderThickness="0" />
+                            <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding ResetText}"
+                                       Foreground="#80FFFFFF" FontSize="11" Margin="0,4,0,0" />
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <TextBlock Text="{Binding StatusText}" Foreground="#99FFFFFF"
+                       FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0" />
+            <TextBlock Text="{Binding LastUpdatedText}" Foreground="#66FFFFFF"
+                       FontSize="10" Margin="0,4,0,0" />
+        </StackPanel>
+    </Border>
+</UserControl>

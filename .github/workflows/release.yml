@@ -1,0 +1,157 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Explicit version to release (e.g. 1.2.3). Leave empty to auto-calculate.'
+        required: false
+        default: ''
+
+# Serialize releases so concurrent merges don't race on tag creation.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Test
+        run: dotnet test ClaudeStats.slnx -c Release --nologo
+
+  version:
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.calc.outputs.version }}
+      skip: ${{ steps.calc.outputs.skip }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # full history so we can read tags + commits
+          fetch-tags: true
+
+      - name: Calculate next version (conventional commits)
+        id: calc
+        shell: pwsh
+        run: |
+          $override = '${{ inputs.version }}'.Trim()
+          $last = (git tag --list 'v*' --sort=-v:refname | Select-Object -First 1)
+
+          if ($override -ne '') {
+            $version = $override
+          }
+          elseif (-not $last) {
+            # No tags yet: seed the first release.
+            $version = '0.1.0'
+          }
+          else {
+            if ($last -notmatch '^v(\d+)\.(\d+)\.(\d+)$') {
+              Write-Error "Latest tag '$last' is not a vMAJOR.MINOR.PATCH tag."
+              exit 1
+            }
+            $major = [int]$Matches[1]; $minor = [int]$Matches[2]; $patch = [int]$Matches[3]
+
+            $subjects = @(git log "$last..HEAD" --pretty=format:%s)
+            $bodies   = (git log "$last..HEAD" --pretty=format:%B) -join "`n"
+
+            $isBreaking = ($bodies -match 'BREAKING CHANGE') -or
+                          ($subjects | Where-Object { $_ -match '^[a-zA-Z]+(\([^)]+\))?!:' }).Count -gt 0
+            $isFeature  = ($subjects | Where-Object { $_ -match '^feat(\([^)]+\))?!?:' }).Count -gt 0
+
+            if ($isBreaking)   { $major++; $minor = 0; $patch = 0 }
+            elseif ($isFeature) { $minor++; $patch = 0 }
+            else                { $patch++ }
+
+            $version = "$major.$minor.$patch"
+          }
+
+          $tag = "v$version"
+          if (git tag --list $tag) {
+            Write-Host "Tag $tag already exists; skipping release."
+            "skip=true" >> $env:GITHUB_OUTPUT
+          } else {
+            "skip=false" >> $env:GITHUB_OUTPUT
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "Last tag: $last -> new version: $version"
+
+      - name: Create and push tag
+        if: steps.calc.outputs.skip != 'true'
+        shell: pwsh
+        run: |
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git tag "v${{ steps.calc.outputs.version }}"
+          git push origin "v${{ steps.calc.outputs.version }}"
+
+  publish:
+    needs: version
+    if: needs.version.outputs.skip != 'true'
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        rid: [win-x64, win-arm64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Publish self-contained single file
+        shell: pwsh
+        run: >
+          dotnet publish src/ClaudeStats/ClaudeStats.csproj
+          -c Release
+          -r ${{ matrix.rid }}
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true
+          -p:Version=${{ needs.version.outputs.version }}
+          -o publish/${{ matrix.rid }}
+
+      - name: Stage artifact
+        shell: pwsh
+        run: Copy-Item "publish/${{ matrix.rid }}/ClaudeStats.exe" "ClaudeStats-${{ matrix.rid }}.exe"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ClaudeStats-${{ matrix.rid }}
+          path: ClaudeStats-${{ matrix.rid }}.exe
+          if-no-files-found: error
+
+  release:
+    needs: [version, publish]
+    if: needs.version.outputs.skip != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.version.outputs.version }}
+          name: v${{ needs.version.outputs.version }}
+          files: dist/**/ClaudeStats-*.exe
+          generate_release_notes: true
