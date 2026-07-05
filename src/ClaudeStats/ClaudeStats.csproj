@@ -11,6 +11,7 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>claude-color.ico</ApplicationIcon>
+    <Version>1.0.0</Version>
   </PropertyGroup>
 
   <ItemGroup>

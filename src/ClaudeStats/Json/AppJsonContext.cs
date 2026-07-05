@@ -20,6 +20,7 @@ namespace ClaudeStats.Json;
 [JsonSerializable(typeof(TokenRefreshRequestDto))]
 [JsonSerializable(typeof(TokenRefreshResponseDto))]
 [JsonSerializable(typeof(TranscriptRecordDto))]
+[JsonSerializable(typeof(GitHubReleaseDto))]
 public partial class AppJsonContext : JsonSerializerContext
 {
 }

@@ -19,4 +19,8 @@ public interface IShellService
     /// <param name="title">Notification title.</param>
     /// <param name="message">Notification body.</param>
     void Notify(string title, string message);
+
+    /// <summary>Opens a URL in the default system browser.</summary>
+    /// <param name="url">The URL to open.</param>
+    void OpenUrl(string url);
 }

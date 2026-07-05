@@ -96,6 +96,10 @@ public partial class App : Application
         // Polish — settings / autostart
         services.AddSingleton<IAutostartService, RegistryAutostartService>();
         services.AddTransient<SettingsViewModel>();
+
+        // Update check
+        services.AddHttpClient<IUpdateChecker, GitHubUpdateChecker>(ConfigureGitHubClient);
+        services.AddHostedService<UpdateCheckHostedService>();
     }
 
     /// <summary>Configures the typed HTTP client for the usage endpoint.</summary>
@@ -118,6 +122,17 @@ public partial class App : Application
         client.DefaultRequestHeaders.UserAgent.ParseAdd(ClaudeApi.UserAgent);
         client.DefaultRequestHeaders.Add("anthropic-beta", ClaudeApi.AnthropicBeta);
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+    }
+
+    /// <summary>Configures the typed HTTP client for the GitHub Releases API.</summary>
+    /// <param name="client">The client to configure.</param>
+    private static void ConfigureGitHubClient(HttpClient client)
+    {
+        client.BaseAddress = new Uri("https://api.github.com/");
+        client.Timeout = TimeSpan.FromSeconds(10);
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("ClaudeStats");
+        client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+        client.DefaultRequestHeaders.Add("X-GitHub-Api-Version", "2022-11-28");
     }
 
     /// <summary>Creates the tray icon, binds it to its view model, and shows it.</summary>

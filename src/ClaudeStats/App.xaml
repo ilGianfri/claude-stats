@@ -21,6 +21,8 @@
                     <MenuItem Header="Usage stats…" Command="{Binding ShowTrendCommand}" />
                     <MenuItem Header="Settings…" Command="{Binding ShowSettingsCommand}" />
                     <Separator />
+                    <MenuItem Header="Check for updates…" Command="{Binding CheckForUpdatesCommand}" />
+                    <Separator />
                     <MenuItem Header="Exit" Command="{Binding ExitCommand}" />
                 </ContextMenu>
             </tb:TaskbarIcon.ContextMenu>

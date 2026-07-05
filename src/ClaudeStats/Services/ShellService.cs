@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Windows;
 using ClaudeStats.ViewModels;
 using ClaudeStats.Views;
@@ -66,6 +67,19 @@ public sealed class ShellService : IShellService
         if (Application.Current?.TryFindResource("TrayIcon") is TaskbarIcon icon)
         {
             icon.ShowNotification(title, message);
+        }
+    }
+
+    /// <inheritdoc />
+    public void OpenUrl(string url)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo { UseShellExecute = true, FileName = url });
+        }
+        catch (Exception)
+        {
+            // Ignore failures to open the browser — non-critical.
         }
     }
 }

@@ -24,6 +24,7 @@ public sealed partial class TrayViewModel : ObservableRecipient,
     private readonly IUsagePoller _poller;
     private readonly IShellService _shell;
     private readonly IClock _clock;
+    private readonly IUpdateChecker _updater;
     private readonly double _warningThresholdPercent;
     private int _lastNotifiedSeverity;
 
@@ -65,17 +66,20 @@ public sealed partial class TrayViewModel : ObservableRecipient,
     /// <param name="clock">Clock for reset countdowns.</param>
     /// <param name="settings">Application settings (warning threshold).</param>
     /// <param name="messenger">Messenger for usage update/error messages.</param>
+    /// <param name="updater">Update checker for GitHub releases.</param>
     public TrayViewModel(
         IUsagePoller poller,
         IShellService shell,
         IClock clock,
         AppSettings settings,
-        IMessenger messenger)
+        IMessenger messenger,
+        IUpdateChecker updater)
         : base(messenger)
     {
         _poller = poller;
         _shell = shell;
         _clock = clock;
+        _updater = updater;
         _warningThresholdPercent = settings.WarningThresholdPercent;
         IsActive = true;
     }
@@ -102,6 +106,17 @@ public sealed partial class TrayViewModel : ObservableRecipient,
     /// <summary>Opens the settings window.</summary>
     [RelayCommand]
     private void ShowSettings() => _shell.ShowSettings();
+
+    /// <summary>Checks GitHub for a newer release and opens it in the browser, or notifies if already up to date.</summary>
+    [RelayCommand]
+    private async Task CheckForUpdatesAsync()
+    {
+        UpdateInfo? update = await _updater.CheckAsync();
+        if (update is not null)
+            _shell.OpenUrl(update.ReleaseUrl);
+        else
+            _shell.Notify("ClaudeStats", "You're up to date.");
+    }
 
     /// <summary>Applies a fresh usage snapshot to the bound state.</summary>
     /// <param name="snapshot">The snapshot to display.</param>
