@@ -16,9 +16,10 @@ public sealed class TrayViewModelTests
     private readonly FakeClock _clock = new();
     private readonly IUsagePoller _poller = Substitute.For<IUsagePoller>();
     private readonly IShellService _shell = Substitute.For<IShellService>();
+    private readonly IUpdateChecker _updater = Substitute.For<IUpdateChecker>();
 
     private TrayViewModel Create() =>
-        new(_poller, _shell, _clock, new AppSettings(), new WeakReferenceMessenger());
+        new(_poller, _shell, _clock, new AppSettings(), new WeakReferenceMessenger(), _updater);
 
     private LimitWindow Window(WindowKind kind, double utilization, TimeSpan resetIn) => new()
     {
