@@ -10,6 +10,7 @@
     <AssemblyName>ClaudeStats</AssemblyName>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>claude-color.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -21,6 +22,10 @@
 
   <ItemGroup>
     <Resource Include="Resources\icons\*.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="claude-color.ico" />
   </ItemGroup>
 
 </Project>

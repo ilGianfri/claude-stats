@@ -5,54 +5,188 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
              d:DesignWidth="280">
-    <Border Background="#FF23252B" CornerRadius="10" Padding="16"
-            Width="280" BorderBrush="#33FFFFFF" BorderThickness="1">
+    <UserControl.Resources>
+        <!-- Flat icon button used in the header (close / settings / trend) -->
+        <Style x:Key="IconButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Foreground" Value="#99FFFFFF" />
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Width" Value="28" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                CornerRadius="4" Padding="4">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#22FFFFFF" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#33FFFFFF" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Refresh button in the footer -->
+        <Style x:Key="RefreshButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="#FFD97757" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Padding" Value="16,6" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                CornerRadius="6" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#FFE08B6A" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#FFBF6040" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <Border Background="#FF23252B" CornerRadius="10"
+            Width="280" BorderBrush="#33FFFFFF" BorderThickness="1"
+            ClipToBounds="True">
         <Border.Effect>
             <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.4" />
         </Border.Effect>
-        <StackPanel>
-            <TextBlock Text="CLAUDE USAGE" Foreground="#99FFFFFF"
-                       FontSize="11" FontWeight="SemiBold" />
-            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                <TextBlock Text="{Binding HeadlineText}" Foreground="White"
-                           FontSize="30" FontWeight="Bold" />
-                <TextBlock Text="{Binding ResetText}" Foreground="#B3FFFFFF"
-                           FontSize="12" VerticalAlignment="Bottom" Margin="10,0,0,6" />
+
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="1" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="1" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- ── Header (drag handle + title + icon buttons) ── -->
+            <Border Grid.Row="0" x:Name="DragHandle"
+                    Padding="14,8,8,8" Cursor="SizeAll"
+                    MouseLeftButtonDown="DragHandle_MouseLeftButtonDown"
+                    MouseMove="DragHandle_MouseMove"
+                    MouseLeftButtonUp="DragHandle_MouseLeftButtonUp">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" Orientation="Horizontal"
+                                VerticalAlignment="Center">
+                        <Viewbox Width="16" Height="16" Margin="0,0,7,0">
+                            <Canvas Width="24" Height="24">
+                                <Path Fill="#FFD97757"
+                                      Data="F1 M4.709 15.955l4.72-2.647.08-.23-.08-.128H9.2l-.79-.048-2.698-.073-2.339-.097-2.266-.122-.571-.121L0 11.784l.055-.352.48-.321.686.06 1.52.103 2.278.158 1.652.097 2.449.255h.389l.055-.157-.134-.098-.103-.097-2.358-1.596-2.552-1.688-1.336-.972-.724-.491-.364-.462-.158-1.008.656-.722.881.06.225.061.893.686 1.908 1.476 2.491 1.833.365.304.145-.103.019-.073-.164-.274-1.355-2.446-1.446-2.49-.644-1.032-.17-.619a2.97 2.97 0 01-.104-.729L6.283.134 6.696 0l.996.134.42.364.62 1.414 1.002 2.229 1.555 3.03.456.898.243.832.091.255h.158V9.01l.128-1.706.237-2.095.23-2.695.08-.76.376-.91.747-.492.584.28.48.685-.067.444-.286 1.851-.559 2.903-.364 1.942h.212l.243-.242.985-1.306 1.652-2.064.73-.82.85-.904.547-.431h1.033l.76 1.129-.34 1.166-1.064 1.347-.881 1.142-1.264 1.7-.79 1.36.073.11.188-.02 2.856-.606 1.543-.28 1.841-.315.833.388.091.395-.328.807-1.969.486-2.309.462-3.439.813-.042.03.049.061 1.549.146.662.036h1.622l3.02.225.79.522.474.638-.079.485-1.215.62-1.64-.389-3.829-.91-1.312-.329h-.182v.11l1.093 1.068 2.006 1.81 2.509 2.33.127.578-.322.455-.34-.049-2.205-1.657-.851-.747-1.926-1.62h-.128v.17l.444.649 2.345 3.521.122 1.08-.17.353-.608.213-.668-.122-1.374-1.925-1.415-2.167-1.143-1.943-.14.08-.674 7.254-.316.37-.729.28-.607-.461-.322-.747.322-1.476.389-1.924.315-1.53.286-1.9.17-.632-.012-.042-.14.018-1.434 1.967-2.18 2.945-1.726 1.845-.414.164-.717-.37.067-.662.401-.589 2.388-3.036 1.44-1.882.93-1.086-.006-.158h-.055L4.132 18.56l-1.13.146-.487-.456.061-.746.231-.243 1.908-1.312-.006.006z" />
+                            </Canvas>
+                        </Viewbox>
+                        <TextBlock Text="Claude Stats" Foreground="White"
+                                   FontSize="13" FontWeight="SemiBold"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="0,0,2,0">
+                        <!-- Usage statistics -->
+                        <Button Style="{StaticResource IconButtonStyle}"
+                                Content="&#xE9D9;"
+                                Command="{Binding ShowTrendCommand}"
+                                ToolTip="Usage statistics" />
+                        <!-- Settings -->
+                        <Button Style="{StaticResource IconButtonStyle}"
+                                Content="&#xE713;"
+                                Command="{Binding ShowSettingsCommand}"
+                                ToolTip="Settings" />
+                        <!-- Close popup -->
+                        <Button Style="{StaticResource IconButtonStyle}"
+                                Content="&#xE711;"
+                                Click="ClosePopup_Click"
+                                ToolTip="Close" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Separator -->
+            <Rectangle Grid.Row="1" Fill="#22FFFFFF" />
+
+            <!-- ── Main content ── -->
+            <StackPanel Grid.Row="2" Margin="14,12,14,12">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="{Binding HeadlineText}" Foreground="White"
+                               FontSize="30" FontWeight="Bold" />
+                    <TextBlock Text="{Binding ResetText}" Foreground="#B3FFFFFF"
+                               FontSize="12" VerticalAlignment="Bottom" Margin="10,0,0,6" />
+                </StackPanel>
+
+                <ItemsControl ItemsSource="{Binding Windows}" Margin="0,12,0,0">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="0,0,0,10">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding Name}"
+                                           Foreground="#E6FFFFFF" FontSize="13" />
+                                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding PercentText}"
+                                           Foreground="White" FontSize="13" FontWeight="SemiBold" />
+                                <ProgressBar Grid.Row="1" Grid.ColumnSpan="2" Height="4" Margin="0,5,0,0"
+                                             Minimum="0" Maximum="100" Value="{Binding Percent, Mode=OneWay}"
+                                             Background="#22FFFFFF" Foreground="#FF4A9EE0"
+                                             BorderThickness="0" />
+                                <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding ResetText}"
+                                           Foreground="#80FFFFFF" FontSize="11" Margin="0,4,0,0" />
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <TextBlock Text="{Binding StatusText}" Foreground="#99FFFFFF"
+                           FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0" />
             </StackPanel>
 
-            <ItemsControl ItemsSource="{Binding Windows}" Margin="0,12,0,0">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <Grid Margin="0,0,0,10">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
+            <!-- Separator -->
+            <Rectangle Grid.Row="3" Fill="#22FFFFFF" />
 
-                            <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding Name}"
-                                       Foreground="#E6FFFFFF" FontSize="13" />
-                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding PercentText}"
-                                       Foreground="White" FontSize="13" FontWeight="SemiBold" />
-                            <ProgressBar Grid.Row="1" Grid.ColumnSpan="2" Height="4" Margin="0,5,0,0"
-                                         Minimum="0" Maximum="100" Value="{Binding Percent, Mode=OneWay}"
-                                         Background="#22FFFFFF" Foreground="#FF4A9EE0"
-                                         BorderThickness="0" />
-                            <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding ResetText}"
-                                       Foreground="#80FFFFFF" FontSize="11" Margin="0,4,0,0" />
-                        </Grid>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-
-            <TextBlock Text="{Binding StatusText}" Foreground="#99FFFFFF"
-                       FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0" />
-            <TextBlock Text="{Binding LastUpdatedText}" Foreground="#66FFFFFF"
-                       FontSize="10" Margin="0,4,0,0" />
-        </StackPanel>
+            <!-- ── Footer (last updated + refresh button) ── -->
+            <Grid Grid.Row="4" Margin="14,10,14,12">
+                <TextBlock Text="{Binding LastUpdatedText}" Foreground="#66FFFFFF"
+                           FontSize="10" VerticalAlignment="Center" />
+                <Button HorizontalAlignment="Right"
+                        Style="{StaticResource RefreshButtonStyle}"
+                        Command="{Binding RefreshCommand}"
+                        Content="Refresh" />
+            </Grid>
+        </Grid>
     </Border>
 </UserControl>

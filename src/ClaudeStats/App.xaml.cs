@@ -2,6 +2,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading;
 using System.Windows;
+using System.Windows.Controls.Primitives;
 using ClaudeStats.Configuration;
 using ClaudeStats.Services;
 using ClaudeStats.ViewModels;
@@ -124,7 +125,30 @@ public partial class App : Application
     {
         _trayIcon = (TaskbarIcon)FindResource("TrayIcon");
         _trayIcon.DataContext = Services.GetRequiredService<TrayViewModel>();
+        _trayIcon.TrayPopupOpen += OnTrayPopupOpen;
         _trayIcon.ForceCreate();
+    }
+
+    /// <summary>
+    /// Repositions the tray popup into the bottom-right of the working area so it sits
+    /// above the taskbar (with a small margin) instead of overlapping it.
+    /// </summary>
+    private void OnTrayPopupOpen(object sender, RoutedEventArgs e)
+    {
+        if (_trayIcon?.TrayPopupResolved is not Popup popup ||
+            popup.Child is not FrameworkElement content)
+        {
+            return;
+        }
+
+        content.UpdateLayout();
+        double width = content.ActualWidth > 0 ? content.ActualWidth : content.DesiredSize.Width;
+        double height = content.ActualHeight > 0 ? content.ActualHeight : content.DesiredSize.Height;
+
+        Rect workArea = SystemParameters.WorkArea;
+        popup.Placement = PlacementMode.AbsolutePoint;
+        popup.HorizontalOffset = workArea.Right - width - 12;
+        popup.VerticalOffset = workArea.Bottom - height - 12;
     }
 
     /// <summary>Stops the host, disposes the tray icon, and releases the mutex on shutdown.</summary>
