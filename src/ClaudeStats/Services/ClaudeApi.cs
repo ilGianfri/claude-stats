@@ -25,5 +25,5 @@ internal static class ClaudeApi
     public const string AnthropicBeta = "oauth-2025-04-20";
 
     /// <summary>User-Agent required to avoid the aggressive anti-abuse rate-limit bucket.</summary>
-    public const string UserAgent = "claude-code/2.1.85";
+    public const string UserAgent = "claude-code/2.1.185";
 }

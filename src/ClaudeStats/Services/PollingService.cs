@@ -13,11 +13,15 @@ namespace ClaudeStats.Services;
 /// </summary>
 public sealed class PollingService : BackgroundService, IUsagePoller
 {
+    /// <summary>Upper bound on the exponential back-off delay applied while polls keep failing.</summary>
+    private static readonly TimeSpan MaxBackoff = TimeSpan.FromMinutes(15);
+
     private readonly IUsageClient _client;
     private readonly IMessenger _messenger;
     private readonly IUiDispatcher _ui;
     private readonly AppSettings _settings;
     private readonly ILogger<PollingService> _logger;
+    private readonly BackoffPolicy _backoff;
 
     /// <summary>Initializes the polling service.</summary>
     /// <param name="client">The usage client.</param>
@@ -37,20 +41,18 @@ public sealed class PollingService : BackgroundService, IUsagePoller
         _ui = ui;
         _settings = settings;
         _logger = logger;
+        _backoff = new BackoffPolicy(settings.RefreshInterval, MaxBackoff);
     }
 
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        using PeriodicTimer timer = new(_settings.RefreshInterval);
-
-        await PollOnceAsync(stoppingToken);
-
         try
         {
-            while (await timer.WaitForNextTickAsync(stoppingToken))
+            while (!stoppingToken.IsCancellationRequested)
             {
-                await PollOnceAsync(stoppingToken);
+                TimeSpan delay = await PollOnceAsync(stoppingToken);
+                await Task.Delay(delay, stoppingToken);
             }
         }
         catch (OperationCanceledException)
@@ -60,22 +62,33 @@ public sealed class PollingService : BackgroundService, IUsagePoller
     }
 
     /// <inheritdoc />
-    public Task RefreshNowAsync(CancellationToken ct = default) => PollOnceAsync(ct);
+    public async Task RefreshNowAsync(CancellationToken ct = default) => await PollOnceAsync(ct);
 
-    /// <summary>Performs a single poll and broadcasts the outcome.</summary>
+    /// <summary>Performs a single poll, broadcasts the outcome, and reports how long to wait next.</summary>
     /// <param name="ct">Cancellation token.</param>
-    /// <returns>A task that completes when the poll and broadcast finish.</returns>
-    private async Task PollOnceAsync(CancellationToken ct)
+    /// <returns>The delay before the next poll: the base interval after a success, or a growing back-off after a transient failure.</returns>
+    private async Task<TimeSpan> PollOnceAsync(CancellationToken ct)
     {
         try
         {
             UsageSnapshot snapshot = await _client.GetUsageAsync(ct);
+            _backoff.Reset();
             await _ui.InvokeAsync(() => _messenger.Send(new UsageUpdatedMessage(snapshot)));
+            return _backoff.BaseInterval;
+        }
+        catch (UsageUnavailableException ex) when (!ex.IsTransient)
+        {
+            // Hard failure (e.g. sign-in required): waiting will not fix it, so stay at the base cadence.
+            _backoff.Reset();
+            await _ui.InvokeAsync(() => _messenger.Send(new UsageErrorMessage(LimitState.Unavailable, ex.Reason)));
+            return _backoff.BaseInterval;
         }
         catch (UsageUnavailableException ex)
         {
-            LimitState state = ex.IsTransient ? LimitState.Stale : LimitState.Unavailable;
-            await _ui.InvokeAsync(() => _messenger.Send(new UsageErrorMessage(state, ex.Reason)));
+            TimeSpan delay = _backoff.NextDelay(ex.RetryAfter);
+            string reason = $"{ex.Reason} Retrying in {FormatDelay(delay)}.";
+            await _ui.InvokeAsync(() => _messenger.Send(new UsageErrorMessage(LimitState.Stale, reason)));
+            return delay;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -84,8 +97,18 @@ public sealed class PollingService : BackgroundService, IUsagePoller
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unexpected error while polling usage.");
-            await _ui.InvokeAsync(() =>
-                _messenger.Send(new UsageErrorMessage(LimitState.Stale, "Unexpected error retrieving usage.")));
+            TimeSpan delay = _backoff.NextDelay();
+            string reason = $"Unexpected error retrieving usage. Retrying in {FormatDelay(delay)}.";
+            await _ui.InvokeAsync(() => _messenger.Send(new UsageErrorMessage(LimitState.Stale, reason)));
+            return delay;
         }
     }
+
+    /// <summary>Formats a retry delay for display (e.g. "45s" or "2m").</summary>
+    /// <param name="delay">The delay to format.</param>
+    /// <returns>A short, human-readable duration.</returns>
+    private static string FormatDelay(TimeSpan delay) =>
+        delay.TotalSeconds < 60
+            ? $"{Math.Round(delay.TotalSeconds)}s"
+            : $"{Math.Round(delay.TotalMinutes)}m";
 }

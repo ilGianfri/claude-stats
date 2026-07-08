@@ -73,7 +73,8 @@ public sealed class UsageClient : IUsageClient
 
             if (response.StatusCode == HttpStatusCode.TooManyRequests)
             {
-                throw new UsageUnavailableException("Rate limited by Claude; will retry.", isTransient: true);
+                throw new UsageUnavailableException(
+                    "Rate limited by Claude.", isTransient: true, retryAfter: GetRetryAfter(response));
             }
 
             if (!response.IsSuccessStatusCode)
@@ -127,6 +128,21 @@ public sealed class UsageClient : IUsageClient
         {
             throw new UsageUnavailableException("Timed out contacting Claude.", isTransient: true, ex);
         }
+    }
+
+    /// <summary>Reads the Retry-After hint from a response, converting an absolute date to a delay.</summary>
+    /// <param name="response">The HTTP response to inspect.</param>
+    /// <returns>The requested wait, or null when the header is absent or already elapsed.</returns>
+    private TimeSpan? GetRetryAfter(HttpResponseMessage response)
+    {
+        RetryConditionHeaderValue? header = response.Headers.RetryAfter;
+        if (header is null)
+        {
+            return null;
+        }
+
+        TimeSpan? delta = header.Delta ?? (header.Date is { } date ? date - _clock.Now : null);
+        return delta is { } value && value > TimeSpan.Zero ? value : null;
     }
 
     /// <summary>
