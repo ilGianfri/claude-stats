@@ -10,6 +10,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using H.NotifyIcon;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Win32;
 
 namespace ClaudeStats;
@@ -68,6 +69,10 @@ public partial class App : Application
     /// <param name="services">The service collection to populate.</param>
     private static void ConfigureServices(IServiceCollection services)
     {
+        // Diagnostics: append warnings+ (and our request-rejection details) to a daily file under
+        // %LOCALAPPDATA%\ClaudeStats\logs so 429s can be collected from users in the field.
+        services.AddSingleton<ILoggerProvider>(_ => new FileLoggerProvider(LogLevel.Information));
+
         // Foundational (Phase 2)
         services.AddSingleton<IClock, SystemClock>();
         services.AddSingleton<IUiDispatcher, WpfDispatcher>();

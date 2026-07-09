@@ -46,6 +46,10 @@ public sealed class StubHttpMessageHandler : HttpMessageHandler
         Func<HttpRequestMessage, HttpResponseMessage> responder = _responders.Count > 1
             ? _responders.Dequeue()
             : _responders.Peek();
-        return Task.FromResult(responder(request));
+        HttpResponseMessage response = responder(request);
+        // Real handlers (e.g. SocketsHttpHandler) attach the originating request; mirror that so
+        // consumers that inspect response.RequestMessage behave as they do in production.
+        response.RequestMessage ??= request;
+        return Task.FromResult(response);
     }
 }

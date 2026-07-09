@@ -60,6 +60,13 @@ public sealed class OAuthTokenService : IOAuthTokenService
 
         using (response)
         {
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning(
+                    "Token refresh rejected: {Diagnostic}",
+                    await HttpDiagnostics.DescribeAsync(response, ct));
+            }
+
             if (response.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
             {
                 throw new UsageUnavailableException("Sign in to Claude required.", isTransient: false);

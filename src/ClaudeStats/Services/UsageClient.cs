@@ -66,6 +66,13 @@ public sealed class UsageClient : IUsageClient
 
         using (response)
         {
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning(
+                    "Usage request rejected: {Diagnostic}",
+                    await HttpDiagnostics.DescribeAsync(response, ct));
+            }
+
             if (response.StatusCode == HttpStatusCode.Unauthorized)
             {
                 throw new UsageUnavailableException("Sign in to Claude required.", isTransient: false);
