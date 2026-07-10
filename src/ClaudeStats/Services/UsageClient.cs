@@ -16,11 +16,24 @@ namespace ClaudeStats.Services;
 /// </summary>
 public sealed class UsageClient : IUsageClient
 {
+    /// <summary>Shortest wait between our own token refreshes after one fails (grows from here).</summary>
+    private static readonly TimeSpan MinRefreshCooldown = TimeSpan.FromMinutes(15);
+
+    /// <summary>Longest wait between our own token refreshes while they keep failing.</summary>
+    private static readonly TimeSpan MaxRefreshCooldown = TimeSpan.FromHours(4);
+
     private readonly HttpClient _http;
     private readonly ICredentialStore _store;
     private readonly IOAuthTokenService _token;
     private readonly IClock _clock;
     private readonly ILogger<UsageClient> _logger;
+
+    // Refresh throttle: the OAuth token endpoint rate-limits hard and expects refreshes to be rare,
+    // so we serialize our refreshes and cool down aggressively after a failure instead of retrying
+    // on every poll. State is per-process and lives as long as the owning singleton.
+    private readonly SemaphoreSlim _refreshGate = new(1, 1);
+    private readonly BackoffPolicy _refreshBackoff = new(MinRefreshCooldown, MaxRefreshCooldown);
+    private DateTimeOffset _refreshCooldownUntil = DateTimeOffset.MinValue;
 
     /// <summary>Initializes the usage client.</summary>
     /// <param name="http">Typed HTTP client configured for the Anthropic API host.</param>
@@ -53,14 +66,19 @@ public sealed class UsageClient : IUsageClient
 
         if (credentials.IsExpired(_clock.Now))
         {
-            credentials = await _token.RefreshAsync(credentials, ct);
+            credentials = await RefreshWithCooldownAsync(credentials, ct);
         }
 
         HttpResponseMessage response = await SendAsync(credentials.AccessToken, ct);
         if (response.StatusCode == HttpStatusCode.Unauthorized)
         {
             response.Dispose();
-            credentials = await _token.RefreshAsync(credentials, ct);
+            // Prefer a token Claude Code may have written since our read; only refresh ourselves if
+            // the shared file still holds the same (rejected) token.
+            OAuthCredentials reread = await _store.ReadAsync(ct) ?? credentials;
+            credentials = reread.AccessToken != credentials.AccessToken && !reread.IsExpired(_clock.Now)
+                ? reread
+                : await RefreshWithCooldownAsync(credentials, ct);
             response = await SendAsync(credentials.AccessToken, ct);
         }
 
@@ -114,6 +132,70 @@ public sealed class UsageClient : IUsageClient
             };
         }
     }
+
+    /// <summary>
+    /// Refreshes the access token at most once per cooldown window. First it re-reads the shared
+    /// credentials file — if Claude Code has already written a newer token, that is used and no
+    /// network refresh happens. Only when the token is still stale do we call the token endpoint, and
+    /// a failure (e.g. HTTP 429) starts/extends a long cooldown so the endpoint is never stormed.
+    /// </summary>
+    /// <param name="current">The credentials we currently hold (whose token is stale).</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Usable credentials.</returns>
+    /// <exception cref="UsageUnavailableException">
+    /// Transient while a refresh cooldown is in effect, or propagated from a failed refresh.
+    /// </exception>
+    private async Task<OAuthCredentials> RefreshWithCooldownAsync(OAuthCredentials current, CancellationToken ct)
+    {
+        if (_clock.Now < _refreshCooldownUntil)
+        {
+            throw new UsageUnavailableException(
+                "Claude sign-in expired; waiting before retrying refresh.", isTransient: true);
+        }
+
+        await _refreshGate.WaitAsync(ct);
+        try
+        {
+            // Defer to Claude Code: if the shared file already holds a fresh, different token, use it.
+            OAuthCredentials fresh = await _store.ReadAsync(ct) ?? current;
+            if (fresh.AccessToken != current.AccessToken && !fresh.IsExpired(_clock.Now))
+            {
+                _refreshBackoff.Reset();
+                _refreshCooldownUntil = DateTimeOffset.MinValue;
+                return fresh;
+            }
+
+            // Re-check after acquiring the gate: a concurrent caller may have just failed and set a cooldown.
+            if (_clock.Now < _refreshCooldownUntil)
+            {
+                throw new UsageUnavailableException(
+                    "Claude sign-in expired; waiting before retrying refresh.", isTransient: true);
+            }
+
+            try
+            {
+                OAuthCredentials refreshed = await _token.RefreshAsync(fresh, ct);
+                _refreshBackoff.Reset();
+                _refreshCooldownUntil = DateTimeOffset.MinValue;
+                return refreshed;
+            }
+            catch (UsageUnavailableException)
+            {
+                _refreshCooldownUntil = _clock.Now + WithJitter(_refreshBackoff.NextDelay());
+                throw;
+            }
+        }
+        finally
+        {
+            _refreshGate.Release();
+        }
+    }
+
+    /// <summary>Adds up to 20% positive jitter to a delay so many clients do not retry in lockstep.</summary>
+    /// <param name="delay">The base delay.</param>
+    /// <returns>The delay plus a small random amount.</returns>
+    private static TimeSpan WithJitter(TimeSpan delay) =>
+        delay + TimeSpan.FromMilliseconds(delay.TotalMilliseconds * 0.2 * Random.Shared.NextDouble());
 
     /// <summary>Issues the authenticated GET request, translating transport failures.</summary>
     /// <param name="accessToken">Bearer token to send.</param>
