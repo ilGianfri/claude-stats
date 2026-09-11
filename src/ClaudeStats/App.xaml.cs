@@ -73,6 +73,11 @@ public partial class App : Application
         // %LOCALAPPDATA%\ClaudeStats\logs so 429s can be collected from users in the field.
         services.AddSingleton<ILoggerProvider>(_ => new FileLoggerProvider(LogLevel.Information));
 
+        // A crashing background service (e.g. the update check timing out) must never stop the
+        // host: the tray app would silently die. Log and keep running instead.
+        services.Configure<HostOptions>(options =>
+            options.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore);
+
         // Foundational (Phase 2)
         services.AddSingleton<IClock, SystemClock>();
         services.AddSingleton<IUiDispatcher, WpfDispatcher>();
@@ -122,11 +127,12 @@ public partial class App : Application
     /// <param name="client">The client to configure.</param>
     private static void ConfigureOAuthClient(HttpClient client)
     {
+        // Mirrors Claude Code's own refresh client (plain axios: no claude-code UA, no anthropic-beta).
+        // The token endpoint answers 429 to the usage-style headers, whatever the request rate.
         client.BaseAddress = new Uri(ClaudeApi.PlatformBaseUrl);
-        client.Timeout = TimeSpan.FromSeconds(10);
-        client.DefaultRequestHeaders.UserAgent.ParseAdd(ClaudeApi.UserAgent);
-        client.DefaultRequestHeaders.Add("anthropic-beta", ClaudeApi.AnthropicBeta);
-        client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        client.Timeout = TimeSpan.FromSeconds(30);
+        client.DefaultRequestHeaders.UserAgent.ParseAdd(ClaudeApi.TokenUserAgent);
+        client.DefaultRequestHeaders.Accept.ParseAdd("application/json, text/plain, */*");
     }
 
     /// <summary>Configures the typed HTTP client for the GitHub Releases API.</summary>

@@ -40,6 +40,26 @@ public sealed class CredentialStoreTests : IDisposable
         Assert.Equal(1751630400000, creds.ExpiresAt.ToUnixTimeMilliseconds());
         Assert.Equal("max", creds.SubscriptionType);
         Assert.Equal("org-9", creds.OrganizationUuid);
+        Assert.Null(creds.Scopes);
+        Assert.Null(creds.RefreshTokenExpiresAt);
+    }
+
+    [Fact]
+    public async Task ReadAsync_ParsesScopes_AndRefreshTokenExpiry()
+    {
+        await File.WriteAllTextAsync(_path,
+            """
+            {"claudeAiOauth":{"accessToken":"acc","refreshToken":"ref","expiresAt":1751630400000,
+             "refreshTokenExpiresAt":1752000000000,"scopes":["user:inference","user:profile"]}}
+            """,
+            TestContext.Current.CancellationToken);
+        CredentialStore store = CreateStore();
+
+        OAuthCredentials? creds = await store.ReadAsync(CancellationToken.None);
+
+        Assert.NotNull(creds);
+        Assert.Equal(["user:inference", "user:profile"], creds!.Scopes);
+        Assert.Equal(1752000000000, creds.RefreshTokenExpiresAt!.Value.ToUnixTimeMilliseconds());
     }
 
     [Fact]
@@ -56,7 +76,7 @@ public sealed class CredentialStoreTests : IDisposable
         await File.WriteAllTextAsync(_path,
             """
             {"claudeAiOauth":{"accessToken":"old","refreshToken":"old-ref","expiresAt":1000,
-             "scopes":["user:inference"],"rateLimitTier":"tier-1"},
+             "refreshTokenExpiresAt":5000,"scopes":["user:inference"],"rateLimitTier":"tier-1"},
              "mcpOAuth":{"srv|abc":{"accessToken":"m"}},"organizationUuid":"org-123"}
             """,
             TestContext.Current.CancellationToken);
@@ -77,11 +97,58 @@ public sealed class CredentialStoreTests : IDisposable
         Assert.Equal("new", oauth.GetProperty("accessToken").GetString());
         Assert.Equal("new-ref", oauth.GetProperty("refreshToken").GetString());
         Assert.Equal(2000, oauth.GetProperty("expiresAt").GetInt64());
-        // Preserved keys:
+        // Preserved keys (the update carried no scopes / refresh-token expiry of its own):
+        Assert.Equal(5000, oauth.GetProperty("refreshTokenExpiresAt").GetInt64());
         Assert.Equal("tier-1", oauth.GetProperty("rateLimitTier").GetString());
         Assert.Equal("user:inference", oauth.GetProperty("scopes")[0].GetString());
         Assert.True(root.TryGetProperty("mcpOAuth", out _));
         Assert.Equal("org-123", root.GetProperty("organizationUuid").GetString());
+    }
+
+    [Fact]
+    public async Task WriteAsync_WritesScopes_AndRefreshTokenExpiry_WhenProvided()
+    {
+        await File.WriteAllTextAsync(_path,
+            """{"claudeAiOauth":{"accessToken":"old","refreshToken":"old-ref","expiresAt":1000}}""",
+            TestContext.Current.CancellationToken);
+        CredentialStore store = CreateStore();
+
+        OAuthCredentials updated = new()
+        {
+            AccessToken = "new",
+            RefreshToken = "new-ref",
+            ExpiresAt = DateTimeOffset.FromUnixTimeMilliseconds(2000),
+            RefreshTokenExpiresAt = DateTimeOffset.FromUnixTimeMilliseconds(9000),
+            Scopes = ["user:inference", "user:profile"],
+        };
+        await store.WriteAsync(updated, CancellationToken.None);
+
+        using JsonDocument doc = JsonDocument.Parse(
+            await File.ReadAllTextAsync(_path, TestContext.Current.CancellationToken));
+        JsonElement oauth = doc.RootElement.GetProperty("claudeAiOauth");
+        Assert.Equal(9000, oauth.GetProperty("refreshTokenExpiresAt").GetInt64());
+        Assert.Equal(2, oauth.GetProperty("scopes").GetArrayLength());
+        Assert.Equal("user:profile", oauth.GetProperty("scopes")[1].GetString());
+    }
+
+    [Fact]
+    public async Task WriteAsync_OmitsAbsentOptionalKeys_InsteadOfWritingNull()
+    {
+        CredentialStore store = CreateStore();
+
+        OAuthCredentials updated = new()
+        {
+            AccessToken = "new",
+            RefreshToken = "new-ref",
+            ExpiresAt = DateTimeOffset.FromUnixTimeMilliseconds(2000),
+        };
+        await store.WriteAsync(updated, CancellationToken.None);
+
+        using JsonDocument doc = JsonDocument.Parse(
+            await File.ReadAllTextAsync(_path, TestContext.Current.CancellationToken));
+        JsonElement oauth = doc.RootElement.GetProperty("claudeAiOauth");
+        Assert.False(oauth.TryGetProperty("scopes", out _));
+        Assert.False(oauth.TryGetProperty("refreshTokenExpiresAt", out _));
     }
 
     /// <summary>Removes the temp credentials file.</summary>

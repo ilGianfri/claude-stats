@@ -63,6 +63,10 @@ public sealed class CredentialStore : ICredentialStore
                 AccessToken = accessToken,
                 RefreshToken = oauth.RefreshToken ?? string.Empty,
                 ExpiresAt = DateTimeOffset.FromUnixTimeMilliseconds(oauth.ExpiresAt),
+                RefreshTokenExpiresAt = oauth.RefreshTokenExpiresAt is { } refreshExpiry
+                    ? DateTimeOffset.FromUnixTimeMilliseconds(refreshExpiry)
+                    : null,
+                Scopes = oauth.Scopes is { Count: > 0 } ? oauth.Scopes.AsReadOnly() : null,
                 SubscriptionType = oauth.SubscriptionType,
                 OrganizationUuid = dto?.OrganizationUuid,
             };
@@ -91,6 +95,16 @@ public sealed class CredentialStore : ICredentialStore
         dto.ClaudeAiOauth.AccessToken = updated.AccessToken;
         dto.ClaudeAiOauth.RefreshToken = updated.RefreshToken;
         dto.ClaudeAiOauth.ExpiresAt = updated.ExpiresAt.ToUnixTimeMilliseconds();
+        if (updated.RefreshTokenExpiresAt is { } refreshExpiry)
+        {
+            dto.ClaudeAiOauth.RefreshTokenExpiresAt = refreshExpiry.ToUnixTimeMilliseconds();
+        }
+
+        if (updated.Scopes is { Count: > 0 } scopes)
+        {
+            dto.ClaudeAiOauth.Scopes = [.. scopes];
+        }
+
         if (updated.SubscriptionType is not null)
         {
             dto.ClaudeAiOauth.SubscriptionType = updated.SubscriptionType;

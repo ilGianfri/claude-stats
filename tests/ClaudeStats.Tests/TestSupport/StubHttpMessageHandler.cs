@@ -22,6 +22,12 @@ public sealed class StubHttpMessageHandler : HttpMessageHandler
     /// <summary>All requests received, in order.</summary>
     public List<HttpRequestMessage> Requests { get; } = [];
 
+    /// <summary>
+    /// Request bodies as strings, in the same order as <see cref="Requests"/> (null for bodiless
+    /// requests). Captured at send time because callers typically dispose their content afterwards.
+    /// </summary>
+    public List<string?> RequestBodies { get; } = [];
+
     /// <summary>Creates a JSON response with the given status code.</summary>
     /// <param name="json">JSON body.</param>
     /// <param name="status">HTTP status code.</param>
@@ -40,9 +46,12 @@ public sealed class StubHttpMessageHandler : HttpMessageHandler
         _ => new HttpResponseMessage(status);
 
     /// <inheritdoc />
-    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         Requests.Add(request);
+        RequestBodies.Add(request.Content is null
+            ? null
+            : await request.Content.ReadAsStringAsync(cancellationToken));
         Func<HttpRequestMessage, HttpResponseMessage> responder = _responders.Count > 1
             ? _responders.Dequeue()
             : _responders.Peek();
@@ -50,6 +59,6 @@ public sealed class StubHttpMessageHandler : HttpMessageHandler
         // Real handlers (e.g. SocketsHttpHandler) attach the originating request; mirror that so
         // consumers that inspect response.RequestMessage behave as they do in production.
         response.RequestMessage ??= request;
-        return Task.FromResult(response);
+        return response;
     }
 }

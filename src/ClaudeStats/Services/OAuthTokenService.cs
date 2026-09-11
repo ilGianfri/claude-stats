@@ -1,6 +1,9 @@
 using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text;
+using System.Text.Json;
 using ClaudeStats.Json;
 using ClaudeStats.Models;
 using Microsoft.Extensions.Logging;
@@ -9,7 +12,9 @@ namespace ClaudeStats.Services;
 
 /// <summary>
 /// Refreshes the OAuth access token against the platform token endpoint and persists the rotated
-/// credentials via <see cref="ICredentialStore"/>. Never logs token values.
+/// credentials via <see cref="ICredentialStore"/>. The request mirrors the one Claude Code itself
+/// sends (JSON body including <c>scope</c>, plain <c>application/json</c> content type): the
+/// endpoint answers <c>429 rate_limit_error</c> to any other shape. Never logs token values.
 /// </summary>
 public sealed class OAuthTokenService : IOAuthTokenService
 {
@@ -36,17 +41,22 @@ public sealed class OAuthTokenService : IOAuthTokenService
     {
         ArgumentNullException.ThrowIfNull(current);
 
+        IReadOnlyList<string> scopes = current.Scopes is { Count: > 0 } stored ? stored : ClaudeApi.DefaultOAuthScopes;
         TokenRefreshRequestDto request = new()
         {
             GrantType = "refresh_token",
             RefreshToken = current.RefreshToken,
             ClientId = ClaudeApi.OAuthClientId,
+            Scope = string.Join(' ', scopes),
         };
 
         HttpResponseMessage response;
         try
         {
-            using JsonContent content = JsonContent.Create(request, AppJsonContext.Default.TokenRefreshRequestDto);
+            // Plain "application/json" (no charset parameter), exactly like Claude Code's own client.
+            string json = JsonSerializer.Serialize(request, AppJsonContext.Default.TokenRefreshRequestDto);
+            using StringContent content = new(json, Encoding.UTF8);
+            content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
             response = await _http.PostAsync(ClaudeApi.TokenPath, content, ct);
         }
         catch (HttpRequestException ex)
@@ -86,16 +96,35 @@ public sealed class OAuthTokenService : IOAuthTokenService
                 throw new UsageUnavailableException("Token refresh returned no access token.", isTransient: true);
             }
 
+            DateTimeOffset now = _clock.Now;
             OAuthCredentials updated = current with
             {
                 AccessToken = accessToken,
                 RefreshToken = body.RefreshToken is { Length: > 0 } rotated ? rotated : current.RefreshToken,
-                ExpiresAt = _clock.Now.AddSeconds(body.ExpiresIn),
+                ExpiresAt = now.AddSeconds(body.ExpiresIn),
+                RefreshTokenExpiresAt = body.RefreshTokenExpiresIn is { } refreshLifetime
+                    ? now.AddSeconds(refreshLifetime)
+                    : current.RefreshTokenExpiresAt,
+                Scopes = ParseScopes(body.Scope) ?? scopes,
             };
 
             await _store.WriteAsync(updated, ct);
             _logger.LogInformation("Refreshed Claude OAuth access token.");
             return updated;
         }
+    }
+
+    /// <summary>Splits a space-separated scope string into a list.</summary>
+    /// <param name="scope">The raw scope string from the token response.</param>
+    /// <returns>The scopes, or null when the string is empty.</returns>
+    private static IReadOnlyList<string>? ParseScopes(string? scope)
+    {
+        if (string.IsNullOrWhiteSpace(scope))
+        {
+            return null;
+        }
+
+        string[] parts = scope.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return parts.Length > 0 ? parts : null;
     }
 }

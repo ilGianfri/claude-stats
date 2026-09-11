@@ -18,6 +18,16 @@ public sealed class ClaudeAiOAuthDto
     [JsonPropertyName("expiresAt")]
     public long ExpiresAt { get; set; }
 
+    /// <summary>Refresh-token expiry as Unix epoch milliseconds (written by newer Claude Code builds).</summary>
+    [JsonPropertyName("refreshTokenExpiresAt")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public long? RefreshTokenExpiresAt { get; set; }
+
+    /// <summary>OAuth scopes granted to the token.</summary>
+    [JsonPropertyName("scopes")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? Scopes { get; set; }
+
     /// <summary>Subscription label.</summary>
     [JsonPropertyName("subscriptionType")]
     public string? SubscriptionType { get; set; }
@@ -26,7 +36,7 @@ public sealed class ClaudeAiOAuthDto
     [JsonPropertyName("rateLimitTier")]
     public string? RateLimitTier { get; set; }
 
-    /// <summary>Any other members (e.g. <c>scopes</c>) preserved verbatim across writes.</summary>
+    /// <summary>Any other members preserved verbatim across writes.</summary>
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? Extra { get; set; }
 }

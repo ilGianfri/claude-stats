@@ -18,6 +18,12 @@ public sealed record OAuthCredentials
     /// <summary>Instant at which the access token expires.</summary>
     public required DateTimeOffset ExpiresAt { get; init; }
 
+    /// <summary>Instant at which the refresh token itself expires, when known.</summary>
+    public DateTimeOffset? RefreshTokenExpiresAt { get; init; }
+
+    /// <summary>OAuth scopes the token was granted, when recorded; sent back on refresh.</summary>
+    public IReadOnlyList<string>? Scopes { get; init; }
+
     /// <summary>Informational subscription label, if present.</summary>
     public string? SubscriptionType { get; init; }
 
